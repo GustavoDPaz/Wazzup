@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, BookOpen, AlertCircle, HelpCircle, Users, Sparkles, CheckCircle2, Languages, Copy, Check } from 'lucide-react';
+import { Send, BookOpen, AlertCircle, HelpCircle, Users, Sparkles, CheckCircle2, Languages, Copy, Check, Volume2 } from 'lucide-react';
 import { ChatMessageDto, CorrectionDto, RoomDto } from '@englishtalks/shared';
 import { useSocket } from '../contexts/SocketContext';
 import { DictionaryModal } from '../components/pedagogy/DictionaryModal';
@@ -17,6 +17,8 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
   const [occupancy, setOccupancy] = useState(room.occupancy);
   const [topicPrompt, setTopicPrompt] = useState(room.topicPrompt);
   const [helpSent, setHelpSent] = useState(false);
+  const [helpCount, setHelpCount] = useState(0);
+  const [showHelpTooltip, setShowHelpTooltip] = useState(false);
   const [helpStatusText, setHelpStatusText] = useState<string | null>(null);
 
   // Tradução de mensagens inteiras
@@ -78,10 +80,12 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
     // Escuta status de ajuda
     const handleHelpStatus = (data: { requestId: string; status: string; monitorName?: string }) => {
       if (data.status === 'in_progress') {
-        setHelpStatusText(`O monitor ${data.monitorName || 'do IFES'} está a caminho desta sala!`);
-      } else if (data.status === 'resolved') {
-        setHelpStatusText(null);
+        setHelpStatusText(`O monitor ${data.monitorName || 'do SpeakUp'} está a caminho desta sala!`);
         setHelpSent(false);
+      } else if (data.status === 'resolved') {
+        setHelpStatusText('Atendimento concluído. Você pode solicitar apoio novamente se precisar.');
+        setHelpSent(false);
+        setTimeout(() => setHelpStatusText(null), 5000);
       }
     };
 
@@ -152,9 +156,22 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
     socket.emit('help:request', (res) => {
       if (res.success) {
         setHelpSent(true);
+        setHelpCount(prev => prev + 1);
         setHelpStatusText('Chamado enviado aos monitores. Aguarde um momento!');
       }
     });
+  };
+
+  // Pronúncia via Web Speech API nativa (en-US)
+  const handleSpeakMessage = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const cleanText = text.replace(/[*_#`]/g, '').trim();
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   const handleWordDoubleClick = (e: React.MouseEvent<HTMLSpanElement>) => {
@@ -248,28 +265,61 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
             </div>
           </div>
 
-          {/* Botão de Chamar Monitor */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <button
-              onClick={handleRequestHelp}
-              disabled={helpSent}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: helpSent ? 'var(--bg-secondary)' : 'var(--color-accent-alert)',
-                color: helpSent ? 'var(--text-muted)' : '#FFFFFF',
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                border: '1px solid var(--border-color)',
-              }}
-              title="Solicitar apoio do monitor na sala"
+          {/* Botão de Chamar Monitor com Tooltip Explicativo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
+            <div
+              style={{ position: 'relative' }}
+              onMouseEnter={() => setShowHelpTooltip(true)}
+              onMouseLeave={() => setShowHelpTooltip(false)}
             >
-              <HelpCircle size={16} />
-              <span>{helpSent ? 'Monitor Chamado' : 'Chamar Monitor'}</span>
-            </button>
+              <button
+                onClick={handleRequestHelp}
+                disabled={helpSent}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: helpSent ? 'var(--bg-secondary)' : 'var(--color-accent-alert)',
+                  color: helpSent ? 'var(--text-muted)' : '#FFFFFF',
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  border: '1px solid var(--border-color)',
+                  cursor: helpSent ? 'default' : 'pointer',
+                }}
+                aria-label="Solicitar apoio pedagógico ou técnico do monitor"
+              >
+                <HelpCircle size={16} />
+                <span>{helpSent ? 'Monitor Chamado' : helpCount > 0 ? 'Chamar Novamente' : 'Chamar Monitor'}</span>
+              </button>
+
+              {showHelpTooltip && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    zIndex: 100,
+                    width: '260px',
+                    padding: '8px 10px',
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    boxShadow: 'var(--shadow-md)',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-primary)',
+                    lineHeight: 1.4,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <strong style={{ display: 'block', color: 'var(--color-accent-alert)', marginBottom: '2px' }}>
+                    Apoio Pedagógico e Técnico
+                  </strong>
+                  Precisa de auxílio pedagógico ou técnico? Clique para chamar um monitor do SpeakUp até esta sala.
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -334,6 +384,10 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
 
         {messages.map((msg) => {
           const isSelf = msg.senderNickname === userNickname;
+          const isMonitorMsg = Boolean(
+            (msg.senderId && msg.senderId.toLowerCase().includes('monitor')) || 
+            (msg.senderNickname && msg.senderNickname.toLowerCase().includes('monitor'))
+          );
           const isTranslated = !!translations[msg.id];
           const isLoadingTranslation = !!translating[msg.id];
 
@@ -357,7 +411,23 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
                 alignItems: 'center',
                 gap: '6px',
               }}>
-                <strong>{isSelf ? 'Você' : msg.senderNickname}</strong>
+                {isMonitorMsg && (
+                  <span style={{
+                    backgroundColor: 'var(--color-primary)',
+                    color: '#FFFFFF',
+                    fontSize: '0.625rem',
+                    fontWeight: 700,
+                    padding: '1px 5px',
+                    borderRadius: '2px',
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}>
+                    [MONITOR]
+                  </span>
+                )}
+                <strong style={{ color: isMonitorMsg ? 'var(--color-primary)' : undefined }}>
+                  {isSelf ? 'Você' : msg.senderNickname}
+                </strong>
                 <span>•</span>
                 <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
@@ -369,23 +439,60 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
                   maxWidth: '75%',
                   padding: '0.75rem 1rem',
                   borderRadius: '4px',
-                  backgroundColor: isSelf ? 'var(--chat-bubble-self-bg)' : 'var(--chat-bubble-other-bg)',
+                  backgroundColor: isSelf
+                    ? 'var(--chat-bubble-self-bg)'
+                    : isMonitorMsg
+                      ? 'rgba(0, 150, 57, 0.08)'
+                      : 'var(--chat-bubble-other-bg)',
                   color: isSelf ? 'var(--chat-bubble-self-text)' : 'var(--chat-bubble-other-text)',
                   boxShadow: 'var(--shadow-sm)',
                   fontSize: '0.9375rem',
                   position: 'relative',
-                  border: msg.correction ? '2px solid var(--color-primary)' : '1px solid var(--border-color)',
+                  border: msg.correction
+                    ? '2px solid var(--color-primary)'
+                    : isMonitorMsg
+                      ? '1px solid rgba(0, 150, 57, 0.35)'
+                      : '1px solid var(--border-color)',
+                  borderLeft: isMonitorMsg ? '4px solid var(--color-primary)' : undefined,
                   userSelect: 'text',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
                 }}
               >
-                {/* Texto original em inglês */}
-                <p
-                  onDoubleClick={handleWordDoubleClick}
-                  title="Clique com botão direito para traduzir ou duplo clique numa palavra para abrir o dicionário"
-                  style={{ wordBreak: 'break-word' }}
-                >
-                  {msg.originalText}
-                </p>
+                {/* Texto original em inglês com botão de áudio */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                  <p
+                    onDoubleClick={handleWordDoubleClick}
+                    title="Clique com botão direito para traduzir ou duplo clique numa palavra para abrir o dicionário"
+                    style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', margin: 0, flex: 1, lineHeight: 1.45 }}
+                  >
+                    {msg.originalText}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSpeakMessage(msg.originalText);
+                    }}
+                    title="Ouvir pronúncia em inglês (Web Speech)"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: isSelf ? 'rgba(255, 255, 255, 0.85)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '2px',
+                      borderRadius: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.color = isSelf ? '#FFFFFF' : 'var(--color-primary)'}
+                    onMouseOut={(e) => e.currentTarget.style.color = isSelf ? 'rgba(255, 255, 255, 0.85)' : 'var(--text-muted)'}
+                  >
+                    <Volume2 size={15} />
+                  </button>
+                </div>
 
                 {/* Exibição da Tradução Completa (caso solicitada) */}
                 {isLoadingTranslation && (
@@ -414,6 +521,8 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '2px',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
                   }}>
                     <div style={{
                       display: 'flex',
@@ -440,31 +549,39 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
                         Ocultar
                       </button>
                     </div>
-                    <p style={{ margin: 0, lineHeight: 1.4 }}>{translations[msg.id]}</p>
+                    <p style={{ margin: 0, lineHeight: 1.4, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                      {translations[msg.id]}
+                    </p>
                   </div>
                 )}
 
-                {/* Badge Sutil de Correção do Monitor */}
+                {/* Badge Sutil de Correção do Monitor (com quebra responsiva sem deformar) */}
                 {msg.correction && (
                   <div
                     onClick={() => setActiveCorrection(msg.correction!)}
                     style={{
                       marginTop: '0.5rem',
-                      padding: '4px 8px',
+                      padding: '6px 8px',
                       borderRadius: '2px',
                       backgroundColor: isSelf ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 150, 57, 0.1)',
                       color: isSelf ? '#FFFFFF' : 'var(--color-primary)',
                       fontSize: '0.75rem',
                       fontWeight: 600,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '6px',
                       cursor: 'pointer',
+                      maxWidth: '100%',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere',
+                      height: 'auto',
                     }}
                     title="Clique para ver a regra gramatical explicada pelo monitor"
                   >
-                    <CheckCircle2 size={13} />
-                    <span>Dica gramatical do monitor (clique para ver)</span>
+                    <CheckCircle2 size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+                    <span style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', height: 'auto' }}>
+                      Dica pedagógica: {msg.correction.correctedText}
+                    </span>
                   </div>
                 )}
               </div>
@@ -491,10 +608,35 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',
-            minWidth: '190px',
+            minWidth: '200px',
           }}
         >
-          {/* Ação 1: Traduzir Mensagem Toda */}
+          {/* Ação 1: Ouvir Pronúncia (Web Speech API) */}
+          <button
+            onClick={() => {
+              if (contextMenu.message) handleSpeakMessage(contextMenu.message.originalText);
+              setContextMenu({ visible: false, x: 0, y: 0, message: null });
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 10px',
+              borderRadius: '2px',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              color: 'var(--text-primary)',
+              width: '100%',
+              textAlign: 'left',
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <Volume2 size={15} color="var(--color-primary)" />
+            <span>Ouvir Pronúncia (EN)</span>
+          </button>
+
+          {/* Ação 2: Traduzir Mensagem Toda */}
           <button
             onClick={() => {
               if (contextMenu.message) handleTranslateMessage(contextMenu.message);
@@ -519,7 +661,7 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
             <span>{translations[contextMenu.message.id] ? 'Ocultar Tradução' : 'Traduzir Mensagem (PT)'}</span>
           </button>
 
-          {/* Ação 2: Copiar Mensagem */}
+          {/* Ação 3: Copiar Mensagem */}
           <button
             onClick={() => {
               if (contextMenu.message) handleCopyMessage(contextMenu.message.originalText, contextMenu.message.id);
@@ -544,7 +686,7 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
             <span>{copiedId === contextMenu.message.id ? 'Copiado!' : 'Copiar Texto'}</span>
           </button>
 
-          {/* Ação 3: Dicionário em Contexto */}
+          {/* Ação 4: Dicionário em Contexto */}
           <button
             onClick={() => {
               if (contextMenu.message) {
@@ -606,9 +748,12 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
             <BookOpen size={20} />
           </button>
 
-          {/* Campo de Entrada */}
+          {/* Campo de Entrada com suporte a corretor em inglês */}
           <input
             type="text"
+            lang="en"
+            spellCheck={true}
+            autoCorrect="on"
             placeholder="Type your message in English... (Enter para enviar | Botão direito para traduzir)"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
@@ -702,6 +847,9 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
                 padding: '0.5rem 0.75rem',
                 borderRadius: '2px',
                 marginTop: '4px',
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                height: 'auto',
               }}>
                 {activeCorrection.correctedText}
               </p>
@@ -709,7 +857,16 @@ export const RoomPage: React.FC<RoomPageProps> = ({ room, userNickname, onLeaveR
 
             <div>
               <strong style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Regra Aplicada:</strong>
-              <p style={{ fontSize: '0.875rem', marginTop: '4px', lineHeight: 1.5 }}>
+              <p style={{
+                fontSize: '0.875rem',
+                marginTop: '4px',
+                lineHeight: 1.5,
+                wordBreak: 'break-word',
+                overflowWrap: 'anywhere',
+                height: 'auto',
+                maxHeight: '260px',
+                overflowY: 'auto',
+              }}>
                 {activeCorrection.explanationRule}
               </p>
             </div>

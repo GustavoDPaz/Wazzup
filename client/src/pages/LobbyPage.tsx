@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, Users, MessageSquareText, ShieldAlert } from 'lucide-react';
 import { RoomDto } from '@englishtalks/shared';
+import { WhatsAppBanner } from '../components/ui/WhatsAppBanner';
 
 interface LobbyPageProps {
-  onJoinRoom: (roomCode: string, nickname: string) => void;
+  onJoinRoom: (roomCode: string, nickname: string, onError?: (err: string) => void) => void;
   onOpenMonitor: () => void;
 }
 
@@ -36,31 +37,39 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ onJoinRoom, onOpenMonitor 
       return;
     }
 
-    onJoinRoom(roomCode.trim().toUpperCase(), nickname.trim());
+    onJoinRoom(roomCode.trim().toUpperCase(), nickname.trim(), (err) => {
+      setError(err);
+    });
   };
 
   return (
     <div style={{
       flex: 1,
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '1.5rem',
+      flexDirection: 'column',
       backgroundColor: 'var(--bg-secondary)',
       overflowY: 'auto',
     }}>
+      <WhatsAppBanner />
       <div style={{
-        width: '100%',
-        maxWidth: '460px',
-        backgroundColor: 'var(--bg-primary)',
-        borderRadius: 'var(--radius-lg)',
-        padding: '2rem',
-        boxShadow: 'var(--shadow-md)',
-        border: '1px solid var(--border-color)',
+        flex: 1,
         display: 'flex',
-        flexDirection: 'column',
-        gap: '1.5rem',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.5rem',
       }}>
+        <div style={{
+          width: '100%',
+          maxWidth: '460px',
+          backgroundColor: 'var(--bg-primary)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '2rem',
+          boxShadow: 'var(--shadow-md)',
+          border: '1px solid var(--border-color)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.5rem',
+        }}>
         {/* Cabeçalho do Card */}
         <div style={{ textAlign: 'center' }}>
           <div style={{
@@ -86,7 +95,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ onJoinRoom, onOpenMonitor 
             color: 'var(--text-muted)',
             marginTop: '0.25rem',
           }}>
-            Laboratório Interativo de Prática de Língua Inglesa — IFES
+            Laboratório Interativo de Prática de Língua Inglesa — SpeakUp
           </p>
         </div>
 
@@ -264,6 +273,7 @@ export const LobbyPage: React.FC<LobbyPageProps> = ({ onJoinRoom, onOpenMonitor 
             <span>Acessar como Monitor / Gestão</span>
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

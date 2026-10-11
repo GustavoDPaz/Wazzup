@@ -112,7 +112,7 @@ export function setupSocketHandlers(io: Server<ClientToServerEvents, ServerToCli
 
     // 6. Monitor aplica correção gramatical
     socket.on('monitor:correct_message', ({ messageId, correctedText, explanationRule, shortcutTag }) => {
-      const monitorName = 'Monitor IFES';
+      const monitorName = 'Monitor SpeakUp';
       const applied = roomStore.applyCorrection(
         messageId,
         socket.id,
@@ -129,7 +129,7 @@ export function setupSocketHandlers(io: Server<ClientToServerEvents, ServerToCli
 
     // 7. Monitor atende chamado de ajuda
     socket.on('monitor:attend_help', ({ requestId }, callback) => {
-      const updated = roomStore.updateHelpStatus(requestId, 'in_progress', 'Monitor IFES');
+      const updated = roomStore.updateHelpStatus(requestId, 'in_progress', 'Monitor SpeakUp');
       if (updated) {
         io.emit('help:status_changed', {
           requestId: updated.requestId,

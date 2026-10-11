@@ -109,7 +109,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 Autenticação de Administrador
               </h3>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                Acesso restrito ao Painel de Monitoramento IFES
+                Acesso restrito ao Painel de Monitoramento SpeakUp
               </p>
             </div>
           </div>

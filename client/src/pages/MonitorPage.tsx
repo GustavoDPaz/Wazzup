@@ -26,6 +26,40 @@ import {
 import { RoomDto, HelpAlertDto, ChatMessageDto, CorrectionDto } from '@englishtalks/shared';
 import { useSocket } from '../contexts/SocketContext';
 
+interface GrammarShortcut {
+  id: string;
+  label: string;
+  rule: string;
+  tag?: string;
+}
+
+const DEFAULT_SHORTCUTS: GrammarShortcut[] = [
+  {
+    id: "sc-1",
+    label: "3ª Pessoa (-s)",
+    rule: "Remember to add '-s' to verbs in the 3rd person singular (he/she/it). Ex: 'He works', not 'He work'.",
+    tag: "THIRD_PERSON_S",
+  },
+  {
+    id: "sc-2",
+    label: "Passado Regular (-ed)",
+    rule: "Regular verbs in the past tense end in '-ed' (e.g., 'I walked', 'She lived').",
+    tag: "PAST_ED",
+  },
+  {
+    id: "sc-3",
+    label: "Ordem dos Adjetivos",
+    rule: "Adjectives come before the noun in English (e.g., 'a red car', not 'a car red').",
+    tag: "ADJECTIVE_ORDER",
+  },
+  {
+    id: "sc-4",
+    label: "Artigo A vs AN",
+    rule: "Use 'a' before consonant sounds and 'an' before vowel sounds (e.g., 'an apple', 'a university').",
+    tag: "ARTICLE_A_AN",
+  },
+];
+
 interface MonitorPageProps {
   adminToken?: string | null;
   onExitToLobby?: () => void;
@@ -111,29 +145,45 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
     return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
 
-  // Atalhos Rápidos Pedagógicos do IFES (One-click shortcuts)
-  const shortcuts = [
-    {
-      label: "3ª Pessoa (-s)",
-      rule: "Remember to add '-s' to verbs in the 3rd person singular (he/she/it). Ex: 'He works', not 'He work'.",
-      tag: "THIRD_PERSON_S",
-    },
-    {
-      label: "Passado Regular (-ed)",
-      rule: "Regular verbs in the past tense end in '-ed' (e.g., 'I walked', 'She lived').",
-      tag: "PAST_ED",
-    },
-    {
-      label: "Ordem dos Adjetivos",
-      rule: "Adjectives come before the noun in English (e.g., 'a red car', not 'a car red').",
-      tag: "ADJECTIVE_ORDER",
-    },
-    {
-      label: "Artigo A vs AN",
-      rule: "Use 'a' before consonant sounds and 'an' before vowel sounds (e.g., 'an apple', 'a university').",
-      tag: "ARTICLE_A_AN",
-    },
-  ];
+  // Atalhos Rápidos Pedagógicos do SpeakUp com persistência local
+  const [shortcuts, setShortcuts] = useState<GrammarShortcut[]>(() => {
+    try {
+      const saved = localStorage.getItem('speakup_grammar_shortcuts');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_SHORTCUTS;
+  });
+
+  const [showManageShortcutsModal, setShowManageShortcutsModal] = useState(false);
+  const [newShortcutLabel, setNewShortcutLabel] = useState('');
+  const [newShortcutRule, setNewShortcutRule] = useState('');
+
+  const handleAddShortcut = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newShortcutLabel.trim() || !newShortcutRule.trim()) return;
+    const newItem: GrammarShortcut = {
+      id: `sc-${Date.now()}`,
+      label: newShortcutLabel.trim(),
+      rule: newShortcutRule.trim(),
+      tag: `CUSTOM_${Date.now()}`,
+    };
+    const updated = [...shortcuts, newItem];
+    setShortcuts(updated);
+    localStorage.setItem('speakup_grammar_shortcuts', JSON.stringify(updated));
+    setNewShortcutLabel('');
+    setNewShortcutRule('');
+  };
+
+  const handleRemoveShortcut = (id: string) => {
+    const updated = shortcuts.filter(s => s.id !== id);
+    setShortcuts(updated);
+    localStorage.setItem('speakup_grammar_shortcuts', JSON.stringify(updated));
+  };
+
+  const handleResetShortcuts = () => {
+    setShortcuts(DEFAULT_SHORTCUTS);
+    localStorage.setItem('speakup_grammar_shortcuts', JSON.stringify(DEFAULT_SHORTCUTS));
+  };
 
   // 1. Inscrição do Monitor e carregamento inicial
   useEffect(() => {
@@ -233,9 +283,48 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
     }
   }, [liveMessages]);
 
-  const handleAttendHelp = (requestId: string) => {
+  const handleAttendHelp = (req: HelpAlertDto) => {
     if (!socket) return;
-    socket.emit('monitor:attend_help', { requestId }, () => {});
+    socket.emit('monitor:attend_help', { requestId: req.requestId }, () => {});
+
+    // 1. Alterna para a sala solicitada
+    const targetRoom: RoomDto = rooms.find(r => r.code === req.roomCode) || {
+      id: req.roomId,
+      code: req.roomCode,
+      title: req.roomTitle,
+      topicPrompt: '',
+      occupancy: 1,
+      maxCapacity: 4,
+      isActive: true,
+      participants: [],
+    };
+    setSelectedRoom(targetRoom);
+
+    // 2. Carrega as mensagens da sala
+    fetch(`/api/rooms/${req.roomCode}/messages`)
+      .then(res => res.json())
+      .then((data: ChatMessageDto[]) => {
+        if (Array.isArray(data)) {
+          setLiveMessages(data);
+          // 3. Se houver mensagem do aluno que pediu ajuda, seleciona para intervenção pedagógica
+          const studentMsgs = data.filter(m => 
+            m.senderNickname?.toLowerCase() === req.studentNickname?.toLowerCase() ||
+            m.senderId === req.studentId
+          );
+          if (studentMsgs.length > 0) {
+            const latest = studentMsgs[studentMsgs.length - 1];
+            setSelectedMessage(latest);
+            setCorrectionMsgId(latest.id);
+            setCorrectedText(latest.originalText);
+          }
+        }
+      })
+      .catch(() => {});
+
+    // 4. Rola suavemente para a área de conversa e intervenção
+    setTimeout(() => {
+      chatSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   const handleResolveHelp = (requestId: string) => {
@@ -662,7 +751,7 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <button
-                    onClick={() => handleAttendHelp(req.requestId)}
+                    onClick={() => handleAttendHelp(req)}
                     style={{
                       padding: '4px 8px',
                       borderRadius: '2px',
@@ -944,15 +1033,38 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
               </div>
             )}
 
-            {/* Atalhos Rápidos */}
+            {/* Atalhos Rápidos com Gestão Personalizada */}
             <div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Atalhos Rápidos de Regra:
-              </span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                  Atalhos Rápidos de Regra:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowManageShortcutsModal(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    padding: '2px 6px',
+                    borderRadius: '2px',
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--color-primary)',
+                    border: '1px solid var(--border-color)',
+                    cursor: 'pointer',
+                  }}
+                  title="Gerenciar e adicionar atalhos pedagógicos personalizados"
+                >
+                  <Edit2 size={11} />
+                  <span>Gerenciar / + Regra</span>
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 {shortcuts.map((sc) => (
                   <button
-                    key={sc.tag}
+                    key={sc.id || sc.label}
                     type="button"
                     onClick={() => handleApplyShortcut(sc)}
                     style={{
@@ -963,7 +1075,9 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
                       color: 'var(--color-primary)',
                       border: '1px solid var(--border-color)',
                       fontWeight: 600,
+                      cursor: 'pointer',
                     }}
+                    title={sc.rule}
                   >
                     {sc.label}
                   </button>
@@ -1213,7 +1327,10 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
             ) : (
               liveMessages.map((msg) => {
                 const isSelected = selectedMessage?.id === msg.id;
-                const isMonitorMsg = msg.senderId === 'monitor-ifes' || msg.senderNickname === 'Monitor IFES';
+                const isMonitorMsg = Boolean(
+                  (msg.senderId && msg.senderId.toLowerCase().includes('monitor')) || 
+                  (msg.senderNickname && msg.senderNickname.toLowerCase().includes('monitor'))
+                );
 
                 return (
                   <div
@@ -2040,6 +2157,227 @@ export const MonitorPage: React.FC<MonitorPageProps> = ({
                 {deleteLoading ? 'Excluindo Sala...' : 'Excluir Definitivamente'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Gerenciamento e Adição Rápida de Regras Gramaticais */}
+      {showManageShortcutsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1150,
+          padding: '1rem',
+          backdropFilter: 'blur(3px)',
+        }}>
+          <div style={{
+            backgroundColor: 'var(--bg-primary)',
+            borderRadius: '4px',
+            border: '1px solid var(--border-color)',
+            width: '100%',
+            maxWidth: '540px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '1.5rem',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={20} color="var(--color-primary)" />
+                <div>
+                  <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Atalhos de Regras Gramaticais
+                  </h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Cadastre ou customize regras pedagógicas rápidas (persistidas localmente no navegador).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowManageShortcutsModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Lista de Atalhos Cadastrados */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Atalhos Disponíveis ({shortcuts.length}):
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
+                {shortcuts.map((sc) => (
+                  <div
+                    key={sc.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      border: '1px solid var(--border-color)',
+                    }}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <strong style={{ fontSize: '0.8125rem', color: 'var(--color-primary)' }}>
+                        {sc.label}
+                      </strong>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-primary)', marginTop: '2px', lineHeight: 1.4 }}>
+                        {sc.rule}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveShortcut(sc.id)}
+                      title="Excluir este atalho"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--color-accent-alert)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Formulário para Cadastrar Novo Atalho */}
+            <form
+              onSubmit={handleAddShortcut}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
+                paddingTop: '0.75rem',
+                borderTop: '1px solid var(--border-color)',
+              }}
+            >
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Novo Atalho Rápido:
+              </span>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
+                  Nome do Atalho (ex: Present Perfect)
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Present Perfect (have + participle)"
+                  value={newShortcutLabel}
+                  onChange={(e) => setNewShortcutLabel(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.8125rem',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>
+                  Regra Pedagógica Explicada
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="Ex: Use 'have/has + past participle' for actions that happened at an unspecified time or started in the past and continue..."
+                  value={newShortcutRule}
+                  onChange={(e) => setNewShortcutRule(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.8125rem',
+                    resize: 'none',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                <button
+                  type="button"
+                  onClick={handleResetShortcuts}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    backgroundColor: 'transparent',
+                    color: 'var(--text-muted)',
+                    border: '1px solid var(--border-color)',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Restaurar Padrões
+                </button>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="submit"
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--color-primary)',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Adicionar Atalho
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowManageShortcutsModal(false)}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '4px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-color)',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

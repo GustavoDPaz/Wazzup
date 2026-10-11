@@ -44,8 +44,8 @@ class RoomStore {
       },
       {
         code: 'ROOM-104',
-        title: 'Student Life at IFES',
-        topicPrompt: 'Describe a typical day of your studies at IFES and what you enjoy the most.',
+        title: 'Student Life & Routine',
+        topicPrompt: 'Describe a typical day of your student life and what you enjoy the most about your routine.',
         maxCapacity: 4,
       },
     ];
@@ -100,7 +100,7 @@ class RoomStore {
               id: m.corrections[0].id,
               messageId: m.id,
               monitorId: m.corrections[0].monitorId,
-              monitorName: m.corrections[0].monitor.nickname || 'Monitor IFES',
+              monitorName: m.corrections[0].monitor.nickname || 'Monitor SpeakUp',
               correctedText: m.corrections[0].correctedText,
               explanationRule: m.corrections[0].explanationRule,
               shortcutTag: m.corrections[0].shortcutTag || undefined,
@@ -268,22 +268,29 @@ class RoomStore {
   }
 
   public joinRoom(roomCode: string, socketId: string, nickname: string): { room: RoomDto; user: ParticipantDto } | { error: string } {
-    const code = roomCode.trim().toUpperCase();
-    let room = this.rooms.get(code);
+    const code = (roomCode || '').trim().toUpperCase();
+    if (!code) {
+      return { error: 'Código de sala inválido. Verifique o código e tente novamente.' };
+    }
 
-    if (!room) {
-      room = {
-        id: `room-${code.toLowerCase()}`,
-        code,
-        title: `Sala Temática ${code}`,
-        topicPrompt: 'Introduce yourself to your partner and share what you hope to learn today!',
-        occupancy: 0,
-        maxCapacity: 4,
-        isActive: true,
-        participants: new Map(),
-        messages: [],
-      };
-      this.rooms.set(code, room);
+    const room = this.rooms.get(code);
+    if (!room || !room.isActive) {
+      return { error: 'Código de sala inválido. Verifique o código e tente novamente.' };
+    }
+
+    const cleanNick = (nickname || '').trim();
+    if (!cleanNick) {
+      return { error: 'Por favor, informe seu nickname para participar.' };
+    }
+
+    // Validação estrita de duplicidade de nickname na mesma sala
+    const nickLower = cleanNick.toLowerCase();
+    const isNickInUse = Array.from(room.participants.values()).some(
+      p => p.nickname.trim().toLowerCase() === nickLower
+    );
+
+    if (isNickInUse) {
+      return { error: 'Este nickname já está em uso nesta sala. Por favor, escolha outro.' };
     }
 
     if (room.participants.size >= room.maxCapacity) {
@@ -292,7 +299,7 @@ class RoomStore {
 
     const participant: InternalParticipant = {
       id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      nickname: nickname.trim(),
+      nickname: cleanNick,
       role: 'student',
       joinedAt: new Date().toISOString(),
       socketId,
@@ -410,8 +417,8 @@ class RoomStore {
       id: `msg-mon-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       roomId: room.id,
       roomCode: room.code,
-      senderId: 'monitor-ifes',
-      senderNickname: 'Monitor IFES',
+      senderId: 'monitor-speakup',
+      senderNickname: 'Monitor SpeakUp',
       originalText: text.trim(),
       wordCount: words.length,
       createdAt: new Date().toISOString(),
@@ -422,11 +429,11 @@ class RoomStore {
     // Preservação no PostgreSQL
     try {
       await prisma.user.upsert({
-        where: { id: 'monitor-ifes' },
+        where: { id: 'monitor-speakup' },
         update: { lastActive: new Date() },
         create: {
-          id: 'monitor-ifes',
-          nickname: 'Monitor IFES',
+          id: 'monitor-speakup',
+          nickname: 'Monitor SpeakUp',
           role: 'MONITOR',
         },
       });
@@ -437,7 +444,7 @@ class RoomStore {
           data: {
             id: message.id,
             roomId: dbRoom.id,
-            senderId: 'monitor-ifes',
+            senderId: 'monitor-speakup',
             originalText: message.originalText,
             wordCount: message.wordCount,
             createdAt: new Date(message.createdAt),

@@ -24,21 +24,23 @@ const MainApp: React.FC = () => {
   });
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
-  const handleJoinRoom = (roomCode: string, enteredNickname: string) => {
+  const handleJoinRoom = (roomCode: string, enteredNickname: string, onError?: (err: string) => void) => {
     if (!socket) {
-      alert('Conectando ao servidor... Por favor tente novamente em alguns segundos.');
+      const msg = 'Conectando ao servidor... Por favor tente novamente em alguns segundos.';
+      if (onError) onError(msg);
+      else alert(msg);
       return;
     }
 
-    setNickname(enteredNickname);
-
     socket.emit('room:join', { roomCode, nickname: enteredNickname }, (res) => {
       if (res.success && res.room) {
+        setNickname(enteredNickname);
         setCurrentRoom(res.room);
         setView('room');
-        setJoinError(null);
       } else {
-        alert(res.error || 'Não foi possível entrar na sala.');
+        const errorMsg = res.error || 'Código de sala inválido. Verifique o código e tente novamente.';
+        if (onError) onError(errorMsg);
+        else alert(errorMsg);
       }
     });
   };

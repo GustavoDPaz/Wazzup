@@ -1,6 +1,7 @@
-import React from 'react';
-import { Sun, Moon, LogOut, ShieldAlert } from 'lucide-react';
+import React, { useState } from 'react';
+import { Sun, Moon, LogOut, ShieldAlert, HelpCircle } from 'lucide-react';
 import { useTheme } from '../../contexts/ThemeContext';
+import { UserGuideModal } from './UserGuideModal';
 
 interface HeaderProps {
   roomCode?: string;
@@ -18,6 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
   isMonitorView = false,
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   return (
     <header style={{
@@ -59,7 +61,7 @@ export const Header: React.FC<HeaderProps> = ({
           color: 'var(--text-muted)',
           border: '1px solid var(--border-color)',
         }}>
-          IFES
+          SpeakUp
         </span>
 
         {roomCode && (
@@ -91,6 +93,28 @@ export const Header: React.FC<HeaderProps> = ({
             <strong style={{ color: 'var(--text-primary)' }}>{nickname}</strong>
           </div>
         )}
+
+        {/* Botão Guia de Uso */}
+        <button
+          onClick={() => setIsGuideOpen(true)}
+          title="Abrir Guia de Utilização"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 10px',
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border-color)',
+            cursor: 'pointer',
+          }}
+        >
+          <HelpCircle size={16} color="var(--color-primary)" />
+          <span>Guia de Uso</span>
+        </button>
 
         {/* Botão de Tema Claro/Escuro */}
         <button
@@ -157,6 +181,12 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
       </div>
+
+      {/* Modal Guia de Utilização */}
+      <UserGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+      />
     </header>
   );
 };
