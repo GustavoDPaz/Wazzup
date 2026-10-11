@@ -1,0 +1,147 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  STUDENT
+  MONITOR
+  ADMIN
+}
+
+enum HelpStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CANCELLED
+}
+
+model User {
+  id              String         @id @default(uuid())
+  nickname        String         @db.VarChar(60)
+  institutionalId String?        @map("institutional_id") @db.VarChar(50)
+  username        String?        @unique @db.VarChar(50)
+  passwordHash    String?        @map("password_hash") @db.Text
+  role            UserRole       @default(STUDENT)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  lastActive      DateTime       @default(now()) @map("last_active")
+
+  messages        ChatMessage[]
+  corrections     GrammarCorrection[] @relation("MonitorCorrections")
+  helpRequests    HelpRequest[]       @relation("StudentHelpRequests")
+  attendedHelps   HelpRequest[]       @relation("MonitorAttendedRequests")
+  participations  RoomParticipant[]
+  metrics         StudentMetric[]
+
+  @@map("users")
+}
+
+model Room {
+  id           String            @id @default(uuid())
+  code         String            @unique @db.VarChar(10)
+  title        String            @db.VarChar(100)
+  topicPrompt  String            @map("topic_prompt") @db.Text
+  maxCapacity  Int               @default(4) @map("max_capacity")
+  isActive     Boolean           @default(true) @map("is_active")
+  createdAt    DateTime          @default(now()) @map("created_at")
+
+  participants RoomParticipant[]
+  messages     ChatMessage[]
+  helpRequests HelpRequest[]
+
+  @@map("rooms")
+}
+
+model RoomParticipant {
+  id        String    @id @default(uuid())
+  roomId    String    @map("room_id")
+  userId    String    @map("user_id")
+  joinedAt  DateTime  @default(now()) @map("joined_at")
+  leftAt    DateTime? @map("left_at")
+  isCurrent Boolean   @default(true) @map("is_current")
+
+  room      Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, isCurrent])
+  @@map("room_participants")
+}
+
+model ChatMessage {
+  id               String              @id @default(uuid())
+  roomId           String              @map("room_id")
+  senderId         String              @map("sender_id")
+  originalText     String              @map("original_text") @db.Text
+  wordCount        Int                 @default(0) @map("word_count")
+  hasSpellingIssue Boolean             @default(false) @map("has_spelling_issue")
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  room             Room                @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender           User                @relation(fields: [senderId], references: [id])
+  corrections      GrammarCorrection[]
+
+  @@index([roomId, createdAt])
+  @@map("chat_messages")
+}
+
+model GrammarCorrection {
+  id              String      @id @default(uuid())
+  messageId       String      @map("message_id")
+  monitorId       String      @map("monitor_id")
+  correctedText   String      @map("corrected_text") @db.Text
+  explanationRule String      @map("explanation_rule") @db.Text
+  shortcutTag     String?     @map("shortcut_tag") @db.VarChar(50)
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  message         ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  monitor         User        @relation("MonitorCorrections", fields: [monitorId], references: [id])
+
+  @@map("grammar_corrections")
+}
+
+model HelpRequest {
+  id          String     @id @default(uuid())
+  roomId      String     @map("room_id")
+  requestedBy String     @map("requested_by")
+  attendedBy  String?    @map("attended_by")
+  status      HelpStatus @default(PENDING)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  resolvedAt  DateTime?  @map("resolved_at")
+
+  room        Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  student     User       @relation("StudentHelpRequests", fields: [requestedBy], references: [id])
+  monitor     User?      @relation("MonitorAttendedRequests", fields: [attendedBy], references: [id])
+
+  @@index([status])
+  @@map("help_requests")
+}
+
+model MonitorShortcut {
+  id               String @id @default(uuid())
+  category         String @db.VarChar(50)
+  label            String @db.VarChar(80)
+  templateFeedback String @map("template_feedback") @db.Text
+  explanationRule  String @map("explanation_rule") @db.Text
+
+  @@map("monitor_shortcuts")
+}
+
+model StudentMetric {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  sessionDate         DateTime @default(now()) @map("session_date") @db.Date
+  totalMessages       Int      @default(0) @map("total_messages")
+  totalWords          Int      @default(0) @map("total_words")
+  correctionsReceived Int      @default(0) @map("corrections_received")
+  activeMinutes       Int      @default(0) @map("active_minutes")
+  commonErrors        Json     @default("[]") @map("common_errors")
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sessionDate])
+  @@map("student_metrics")
+}

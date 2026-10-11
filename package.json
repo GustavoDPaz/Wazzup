@@ -1,0 +1,19 @@
+{
+  "name": "englishtalks",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Wazzup - Plataforma de Comunicação Interativa para Prática de Inglês (IFES)",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build": "npm run build --workspace=shared && npm run build --workspace=server && npm run build --workspace=client"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

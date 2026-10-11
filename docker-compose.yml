@@ -1,0 +1,56 @@
+services:
+  # 1. Banco de Dados Relacional PostgreSQL 16
+  postgres:
+    image: postgres:16-alpine
+    container_name: wazzup_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wazzup_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wazzup_password}
+      POSTGRES_DB: ${POSTGRES_DB:-wazzup_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wazzup_user} -d ${POSTGRES_DB:-wazzup_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Servidor Backend (Node.js + Express + Socket.io + Prisma)
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: wazzup_server
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wazzup_user}:${POSTGRES_PASSWORD:-wazzup_password}@postgres:5432/${POSTGRES_DB:-wazzup_db}?schema=public
+      PORT: 4000
+      CLIENT_ORIGIN: "*"
+      NODE_ENV: production
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET:-wazzup_secret_key_development}
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # 3. Frontend Web (React + Nginx Reverse Proxy)
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: wazzup_client
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
+
+volumes:
+  postgres_data:
+    driver: local

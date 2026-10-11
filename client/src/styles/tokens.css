@@ -1,0 +1,51 @@
+/* client/src/styles/tokens.css - Paleta Oficial Estrita IFES */
+:root {
+  /* 1. Cores de Ação e Marca */
+  --color-primary: #009639;              /* Verde IF */
+  --color-primary-dark: #007A2E;         /* Hover / Contraste */
+  --color-accent-alert: #C8102E;         /* Vermelho IF (Alerta / Prazos / Ajuda) */
+
+  /* 2. Neutros e Superfícies (Modo Claro) */
+  --bg-primary: #FFFFFF;                 /* Fundo principal de páginas e cards */
+  --bg-secondary: #F4F6F8;               /* Áreas de destaque sutil, backdrops */
+  --border-color: #E2E8F0;               /* Bordas de cards, inputs e divisores */
+  --text-primary: #1E293B;               /* Alto contraste para leitura */
+  --text-muted: #64748B;                 /* Legendas, datas e descrições */
+
+  /* Chat & Componentes */
+  --chat-bubble-self-bg: var(--color-primary);
+  --chat-bubble-self-text: #FFFFFF;
+  --chat-bubble-other-bg: var(--bg-secondary);
+  --chat-bubble-other-text: var(--text-primary);
+  --correction-badge-border: var(--color-primary);
+  --correction-badge-bg: rgba(0, 150, 57, 0.08);
+
+  /* Sombras sutis e raios de borda (Máximo 4px para identidade institucional sem aspecto de IA) */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="dark"] {
+  /* Cores de Ação e Marca permanecem consistentes */
+  --color-primary: #009639;
+  --color-primary-dark: #007A2E;
+  --color-accent-alert: #C8102E;
+
+  /* Neutros e Superfícies (Modo Escuro) */
+  --bg-primary: #0F172A;
+  --bg-secondary: #1E293B;
+  --border-color: #334155;
+  --text-primary: #F8FAFC;
+  --text-muted: #94A3B8;
+
+  /* Chat & Componentes no Escuro */
+  --chat-bubble-self-bg: var(--color-primary);
+  --chat-bubble-self-text: #FFFFFF;
+  --chat-bubble-other-bg: var(--bg-secondary);
+  --chat-bubble-other-text: var(--text-primary);
+  --correction-badge-border: var(--color-primary);
+  --correction-badge-bg: rgba(0, 150, 57, 0.2);
+}
